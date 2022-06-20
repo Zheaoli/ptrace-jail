@@ -1,0 +1,3 @@
+[[rules]]
+name="python3"
+filename="/etc/passwd"
