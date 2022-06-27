@@ -1,7 +1,7 @@
 import argparse
 import multiprocessing
 import sys
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
 from queue import Queue
 
 from loguru import logger
@@ -22,19 +22,20 @@ if not args_object.config:
 
 
 def main():
-    ctx = multiprocessing.get_context("spawn")
+    ctx = multiprocessing.get_context("fork")
+    task_queue = ctx.Queue()
     logger.remove()
     if args_object.verbose:
         logger.add(sys.stdout, level="DEBUG")
     else:
         logger.add(sys.stdout, level="INFO")
-    thread_worker = ThreadPoolExecutor(max_workers=2)
-    queue = Queue(10000)
-    worker = TraceWorker(queue, args_object.config)
+    thread_worker = ProcessPoolExecutor(max_workers=2)
+    # queue = Queue(10000)
+    worker = TraceWorker(task_queue, args_object.config)
     worker_future = thread_worker.submit(worker.run)
-    monitor = Monitor(queue)
+    monitor = Monitor(task_queue)
     thread_worker.submit(monitor.loop)
     logger.info("all task submitted")
     while not worker_future.done():
         logger.exception(worker_future.exception())
-    thread_worker.shutdown(wait=True)
+    thread_worker.shutdown()
