@@ -2,12 +2,13 @@ from queue import Queue
 from selectors import EVENT_READ, DefaultSelector
 
 from jail.core.core import connect_netlink, process_event_handler
+from jail.config import task_queue
 
 
 class Monitor:
-    def __init__(self, process_event_queue: Queue):
+    def __init__(self):
         self.selector = DefaultSelector()
-        self._task_queue = process_event_queue
+        # self._task_queue = process_event_queue
         fd = connect_netlink()
         self.register(fd, process_event_handler)
 
@@ -21,4 +22,4 @@ class Monitor:
                 callback = key.data
                 temp = callback(key.fileobj)
                 if temp and temp.pid > 0:
-                    self._task_queue.put(temp)
+                    task_queue.put(temp)

@@ -7,18 +7,19 @@ from psutil import NoSuchProcess
 
 from jail.config.config import parse_config
 from jail.core.core import protect_process
+from jail.config import task_queue
 
 
 class TraceWorker(object):
-    def __init__(self, queue: Queue, config_file: str):
-        self.task_queue = queue
+    def __init__(self, config_file: str):
+        # self.task_queue = queue
         self.pool = ProcessPoolExecutor(max_workers=10)
         self.config = parse_config(config_file).get("rules")
         logger.debug(self.config)
 
     def run(self):
         while True:
-            task = self.task_queue.get()
+            task = task_queue.get()
             try:
                 pid_object = psutil.Process(task.pid)
                 for process_config in self.config:

@@ -8,6 +8,7 @@ from loguru import logger
 
 from jail.monitor.monitor import Monitor
 from jail.trace.trace import TraceWorker
+from jail.config import ctx, task_queue
 
 args = argparse.ArgumentParser()
 args.add_argument("--version", action="version", version="0.0.1")
@@ -22,8 +23,6 @@ if not args_object.config:
 
 
 def main():
-    ctx = multiprocessing.get_context("fork")
-    task_queue = ctx.Queue()
     logger.remove()
     if args_object.verbose:
         logger.add(sys.stdout, level="DEBUG")
@@ -31,9 +30,9 @@ def main():
         logger.add(sys.stdout, level="INFO")
     thread_worker = ProcessPoolExecutor(max_workers=2, mp_context=ctx)
     # queue = Queue(10000)
-    worker = TraceWorker(task_queue, args_object.config)
+    worker = TraceWorker(args_object.config)
     worker_future = thread_worker.submit(worker.run)
-    monitor = Monitor(task_queue)
+    monitor = Monitor()
     thread_worker.submit(monitor.loop)
     logger.info("all task submitted")
     while not worker_future.done():
