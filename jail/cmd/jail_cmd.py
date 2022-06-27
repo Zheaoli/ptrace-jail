@@ -29,7 +29,7 @@ def main():
         logger.add(sys.stdout, level="DEBUG")
     else:
         logger.add(sys.stdout, level="INFO")
-    thread_worker = ProcessPoolExecutor(max_workers=2)
+    thread_worker = ProcessPoolExecutor(max_workers=2, mp_context=ctx)
     # queue = Queue(10000)
     worker = TraceWorker(task_queue, args_object.config)
     worker_future = thread_worker.submit(worker.run)
