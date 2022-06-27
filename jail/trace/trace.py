@@ -24,7 +24,7 @@ class TraceWorker(object):
                 for process_config in self.config:
                     stop_match = False
                     for item in pid_object.cmdline():
-                        if process_config.get("name") == item:
+                        if process_config.get("name") in item:
                             logger.debug(
                                 f"protucted {process_config['filename']} be readed from {pid_object.pid} with cmdline {pid_object.cmdline()} "
                             )

@@ -12,8 +12,10 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include<pthread.h>
 
 typedef enum process_event_type { FORK = 0, EXEC = 1 } process_event_type;
+#define NERLINK_SOCKER_RECV_BUFFER_SIZE 65535
 
 typedef struct process_event {
   unsigned long pid;
@@ -40,10 +42,13 @@ static int netlink_connect() {
   if (netlink_sock == -1) {
     return -1;
   }
+  int buffersize = NERLINK_SOCKER_RECV_BUFFER_SIZE;
+  setsockopt(netlink_sock, SOL_SOCKET, SO_RCVBUF, &buffersize, sizeof(int));
   sa_nl.nl_family = AF_NETLINK;
   sa_nl.nl_groups = CN_IDX_PROC;
   sa_nl.nl_pid = getpid();
   rc = bind(netlink_sock, (struct sockaddr *)&sa_nl, sizeof(sa_nl));
+
   if (rc == -1) {
     close(netlink_sock);
     return -1;
@@ -94,7 +99,15 @@ static int make_non_blocking_socket(int sfd) {
   return 0;
 }
 
-static int handle_process_event(int netlink_socket, process_event *event) {
+struct arg_struct {
+  int netlink_socket;
+  process_event *event;
+};
+
+static int demo(void *arguments) {
+  struct arg_struct *args = (struct arg_struct *)arguments;
+  int netlink_socket = args->netlink_socket;
+  process_event *event = args->event;
   struct __attribute__((aligned(NLMSG_ALIGNTO))) {
     struct nlmsghdr nl_hdr;
     struct __attribute__((__packed__)) {
@@ -102,18 +115,40 @@ static int handle_process_event(int netlink_socket, process_event *event) {
       struct proc_event proc_ev;
     };
   } nlcn_msg;
-  int rc = recv(netlink_socket, &nlcn_msg, sizeof(nlcn_msg), 0);
-  if (rc == 0 || rc == -1) {
-    return rc;
+  while (true) {
+    int rc = recv(netlink_socket, &nlcn_msg, sizeof(nlcn_msg), 0);
+    if (rc == 0 || rc == -1) {
+      return rc;
+    }
+    switch (nlcn_msg.proc_ev.what) {
+    case PROC_EVENT_NONE:
+      break;
+    case PROC_EVENT_EXEC:
+      event->pid = nlcn_msg.proc_ev.event_data.exec.process_pid;
+      event->type = EXEC;
+      break;
+    default:
+      printf("unhandled proc event,%d,%d,%d\n",
+             nlcn_msg.proc_ev.event_data.exec.process_pid,
+             nlcn_msg.proc_ev.what, errno);
+      break;
+    }
   }
-  switch (nlcn_msg.proc_ev.what) {
-  case PROC_EVENT_NONE:
-    break;
-  case PROC_EVENT_EXEC:
-    event->pid = nlcn_msg.proc_ev.event_data.exec.process_pid;
-    event->type = EXEC;
-  default:
-    break;
+  return 0;
+}
+
+static int handle_process_event(int netlink_socket, process_event *event) {
+  int rc;
+  struct arg_struct args;
+  args.netlink_socket = netlink_socket;
+  args.event = event;
+  pthread_t thread;
+  rc = pthread_create(&thread, NULL, &demo, &args);
+  if (rc != 0) {
+    return -1;
+  }
+  while (true) {
+    sleep(1);
   }
   return 0;
 }
