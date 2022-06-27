@@ -1,14 +1,12 @@
 import argparse
-import multiprocessing
 import sys
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
-from queue import Queue
+from multiprocessing import Pool
 
 from loguru import logger
 
+from jail.config import ctx
 from jail.monitor.monitor import Monitor
 from jail.trace.trace import TraceWorker
-from jail.config import ctx, task_queue
 
 args = argparse.ArgumentParser()
 args.add_argument("--version", action="version", version="0.0.1")
@@ -28,13 +26,14 @@ def main():
         logger.add(sys.stdout, level="DEBUG")
     else:
         logger.add(sys.stdout, level="INFO")
-    thread_worker = ProcessPoolExecutor(max_workers=2, mp_context=ctx)
+    thread_worker = Pool(processes=2)
     # queue = Queue(10000)
     worker = TraceWorker(args_object.config)
-    worker_future = thread_worker.submit(worker.run)
+    _ = thread_worker.apply_async(worker.run)
     monitor = Monitor()
-    thread_worker.submit(monitor.loop)
+    thread_worker.apply_async(monitor.loop)
     logger.info("all task submitted")
-    while not worker_future.done():
-        logger.exception(worker_future.exception())
-    thread_worker.shutdown()
+    # while not worker_process.done():
+    #     logger.exception(worker_process.exception())
+    thread_worker.close()
+    thread_worker.join()

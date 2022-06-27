@@ -19,9 +19,9 @@ class TraceWorker(object):
 
     def run(self):
         while True:
-            task = task_queue.get()
+            pid = task_queue.get()
             try:
-                pid_object = psutil.Process(task.pid)
+                pid_object = psutil.Process(pid)
                 for process_config in self.config:
                     stop_match = False
                     for item in pid_object.cmdline():
