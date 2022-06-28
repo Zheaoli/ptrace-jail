@@ -5,6 +5,7 @@
 #include <linux/cn_proc.h>
 #include <linux/connector.h>
 #include <linux/netlink.h>
+#include <pthread.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -12,7 +13,6 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
-#include<pthread.h>
 
 typedef enum process_event_type { FORK = 0, EXEC = 1 } process_event_type;
 #define NERLINK_SOCKER_RECV_BUFFER_SIZE 65535

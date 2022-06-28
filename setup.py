@@ -7,9 +7,11 @@ from jail import __version__
 
 subprocess.call("make")
 
-
-extensions = [Extension("jail/core/core", ["jail/core/core.c"])]
-
+extensions = [
+    Extension(
+        "jail/core/core", ["jail/core/core.c"], extra_compile_args=["-std=c99", "-g"]
+    )
+]
 
 setup(
     name="pjail",
