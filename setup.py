@@ -13,6 +13,7 @@ extensions = [
     )
 ]
 
+#use setup to creat /usr/bin/pjail for user (-v for debug): pjail -c config.toml -v
 setup(
     name="pjail",
     packages=find_packages("./"),
