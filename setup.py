@@ -23,6 +23,6 @@ setup(
     #start process = jail.cmd.jail_cmd:main
     entry_points={"console_scripts": {"pjail = jail.cmd.jail_cmd:main"}},
     version=__version__,
-    #to gcc *.c for ext_modules
+    #to gcc *.c for ext_modules, allow python use C program
     ext_modules=cythonize(extensions, language=3),
 )
