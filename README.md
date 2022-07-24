@@ -32,4 +32,4 @@ pjail -c $CONFIG_FILE
 ```
 
 Currently Struts
-[img.png](struts.png)
+![img.png](struts.png)
