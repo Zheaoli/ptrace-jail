@@ -5,7 +5,6 @@
 #include <linux/cn_proc.h>
 #include <linux/connector.h>
 #include <linux/netlink.h>
-#include <pthread.h>
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -17,11 +16,13 @@
 typedef enum process_event_type { FORK = 0, EXEC = 1 } process_event_type;
 #define NERLINK_SOCKER_RECV_BUFFER_SIZE 65535
 
+/* process_event save new process information */
 typedef struct process_event {
   unsigned long pid;
   process_event_type type;
 } process_event;
 
+/* this function to init process_event */
 static process_event *process_event_new() {
   process_event *event = (process_event *)malloc(sizeof(process_event));
   event->pid = 0;
@@ -29,11 +30,14 @@ static process_event *process_event_new() {
   return event;
 }
 
+/* this function to clean process_event instance */
 static int free_event(process_event *event) {
   free(event);
   return 0;
 }
 
+/* this function use netlink_sock  to creat socket */
+/* Netlink 是一种在内核与用户应用间进行双向数据传输的非常好的方式，用户态应用使用标准的 socket API 就可以使用 netlink 提供的强大功能，内核态需要使用专门的内核 API 来使用 netlink。*/
 static int netlink_connect() {
   int rc;
   int netlink_sock;
@@ -43,12 +47,12 @@ static int netlink_connect() {
     return -1;
   }
   int buffersize = NERLINK_SOCKER_RECV_BUFFER_SIZE;
+    //set socket options
   setsockopt(netlink_sock, SOL_SOCKET, SO_RCVBUF, &buffersize, sizeof(int));
   sa_nl.nl_family = AF_NETLINK;
   sa_nl.nl_groups = CN_IDX_PROC;
   sa_nl.nl_pid = getpid();
   rc = bind(netlink_sock, (struct sockaddr *)&sa_nl, sizeof(sa_nl));
-
   if (rc == -1) {
     close(netlink_sock);
     return -1;
@@ -56,6 +60,7 @@ static int netlink_connect() {
   return netlink_sock;
 }
 
+/* this function send netlink_socket protocol to kernel for kernel  */
 static int set_process_event_listen(int netlink_socket, bool enable) {
   int rc;
   struct __attribute__((aligned(NLMSG_ALIGNTO))) {
@@ -83,6 +88,7 @@ static int set_process_event_listen(int netlink_socket, bool enable) {
   return 0;
 }
 
+/* this function use fcntl to set socket as  non_blocking_socket*/
 static int make_non_blocking_socket(int sfd) {
   int flags, s;
   flags = fcntl(sfd, F_GETFL, 0);
@@ -99,15 +105,9 @@ static int make_non_blocking_socket(int sfd) {
   return 0;
 }
 
-struct arg_struct {
-  int netlink_socket;
-  process_event *event;
-};
 
-static int demo(void *arguments) {
-  struct arg_struct *args = (struct arg_struct *)arguments;
-  int netlink_socket = args->netlink_socket;
-  process_event *event = args->event;
+/* this function to watch netlink_socket to get new process creat information */
+static int handle_process_event(int netlink_socket, process_event *event) {
   struct __attribute__((aligned(NLMSG_ALIGNTO))) {
     struct nlmsghdr nl_hdr;
     struct __attribute__((__packed__)) {
@@ -115,40 +115,18 @@ static int demo(void *arguments) {
       struct proc_event proc_ev;
     };
   } nlcn_msg;
-  while (true) {
-    int rc = recv(netlink_socket, &nlcn_msg, sizeof(nlcn_msg), 0);
-    if (rc == 0 || rc == -1) {
-      return rc;
-    }
-    switch (nlcn_msg.proc_ev.what) {
-    case PROC_EVENT_NONE:
-      break;
-    case PROC_EVENT_EXEC:
-      event->pid = nlcn_msg.proc_ev.event_data.exec.process_pid;
-      event->type = EXEC;
-      break;
-    default:
-      printf("unhandled proc event,%d,%d,%d\n",
-             nlcn_msg.proc_ev.event_data.exec.process_pid,
-             nlcn_msg.proc_ev.what, errno);
-      break;
-    }
+  int rc = recv(netlink_socket, &nlcn_msg, sizeof(nlcn_msg), 0);
+  if (rc == 0 || rc == -1) {
+    return rc;
   }
-  return 0;
-}
-
-static int handle_process_event(int netlink_socket, process_event *event) {
-  int rc;
-  struct arg_struct args;
-  args.netlink_socket = netlink_socket;
-  args.event = event;
-  pthread_t thread;
-  rc = pthread_create(&thread, NULL, &demo, &args);
-  if (rc != 0) {
-    return -1;
-  }
-  while (true) {
-    sleep(1);
+  switch (nlcn_msg.proc_ev.what) {
+  case PROC_EVENT_NONE:
+    break;
+  case PROC_EVENT_EXEC:
+    event->pid = nlcn_msg.proc_ev.event_data.exec.process_pid;
+    event->type = EXEC;
+  default:
+    break;
   }
   return 0;
 }
