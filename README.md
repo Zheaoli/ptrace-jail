@@ -31,5 +31,5 @@ Finally, you can run the jail by following the command
 pjail -c $CONFIG_FILE
 ```
 
-Currently Struts
+Currently Struts by BlackKD
 ![img.png](struts.png)
