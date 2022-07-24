@@ -12,7 +12,7 @@
 #include <sys/wait.h>
 #include <syscall.h>
 #include <unistd.h>
-
+#define uint8 unsigned int
 /* string struts*/
 typedef struct strbs {
   long len;
@@ -35,12 +35,10 @@ inline int start_with(const char *prefix, const char *str) {
   return len_str < len_pre ? 0 : memcmp(prefix, str_tmp, len_pre) == 0;
 }
 
-inline strb *init_builder() { return NULL; }
-
-
+static strb *init_builder() { return NULL; }
 
 /* this function to get text from address */
-inline strb *init_build_strb(char *init) {
+static strb *init_build_strb(char *init) {
   strb *str = (strb *)malloc(sizeof(strb));
   str->len = strlen(init);
   str->str = init;
@@ -48,8 +46,9 @@ inline strb *init_build_strb(char *init) {
   return str;
 }
 
+
 /* this function to get text segmentation from address Linked list */
-inline strb *build_str(strb *str, char *add) {
+static strb *build_str(strb *str, char *add) {
   if (str == NULL) {
     return init_build_strb(add);
   }
@@ -60,7 +59,7 @@ inline strb *build_str(strb *str, char *add) {
 }
 
 /* this function to get string from text segmentation */
-inline char *get_str(strb *src) {
+static char *get_str(strb *src) {
   char *dest = (char *)malloc(src->len + 1);
   dest[src->len] = '\0';
   char *write = (char *)((long)dest + src->len);
@@ -75,9 +74,8 @@ inline char *get_str(strb *src) {
   return dest;
 }
 
-
 /* print function */
-inline void print_str(strb *a) {
+static void print_str(strb *a) {
 
   while (a != NULL) {
     printf("{len: %ld, str: %s}->", a->len, a->str);
@@ -87,17 +85,18 @@ inline void print_str(strb *a) {
 }
 
 /* this function to get string from adddress */
-inline char *read_parm_string_from_address(pid_t child, void *addr) {
+static char *read_parm_string_from_address(pid_t child, void *addr) {
   strb *str = init_builder();
   int endOfStr = 1;
   int offset = 0;
   while (endOfStr == 1) {
     char *nStr = (char *)malloc(sizeof(long));
-    // use PTRACE_PEEKTEXT to get address information
+        // use PTRACE_PEEKTEXT to get address information
     long r =
         ptrace(PTRACE_PEEKTEXT, child,
-               (void *)((unsigned long long)addr + offset * sizeof(long)), 0);
+               (void *)((long *)addr + offset), 0);
     memcpy((void *)nStr, (void *)&r, sizeof(long));
+    printf("kernel %s\n", nStr);
     str = build_str(str, nStr);
     int i = 0;
     while (i < sizeof(long)) {
@@ -114,7 +113,7 @@ inline char *read_parm_string_from_address(pid_t child, void *addr) {
 
 /* this function to trace process to limit process */
 int trace_process(unsigned long long ch, char *protected_path) {
-  // add attach to specified pid
+    // add attach to specified pid
   ptrace(PTRACE_ATTACH, (pid_t)ch, 0, 0);
   int inSysCall = 0;
   int status;
@@ -123,39 +122,40 @@ int trace_process(unsigned long long ch, char *protected_path) {
     if (WIFEXITED(status)) {
       break;
     }
-    // use ptrace to get pid SYS call type numb
+        // use ptrace to get pid SYS call type numb
     int orig_rax = ptrace(PTRACE_PEEKUSER, (pid_t)ch, 8 * ORIG_RAX, NULL);
-    // only deal with SYS_open or SYS_openat
+        // only deal with SYS_open or SYS_openat
     if (orig_rax == SYS_open || orig_rax == SYS_openat) {
-      // use ptrace to get regs information
+            // use ptrace to get regs information
       struct user_regs_struct regs;
       ptrace(PTRACE_GETREGS, (pid_t)ch, NULL, &regs);
       char *openstr;
       if (orig_rax == SYS_open) {
-        // get syscall argument ，this condition is filepath
+                // get syscall argument ，this condition is filepath
         openstr = read_parm_string_from_address(ch, (void *)regs.rdi);
       } else {
-        // get syscall argument ，this condition is filepath
+                // get syscall argument ，this condition is filepath
         openstr = read_parm_string_from_address(ch, (void *)regs.rsi);
       }
-      // check if filepath in watch
+            // check if filepath in watch
+      printf("the syscall number is %d, the path is %s, validate rule %d\n", orig_rax, openstr, start_with(protected_path, openstr));
       if (start_with(protected_path, openstr)) {
         if (inSysCall == 0) {
-          // system call enter, change inSysCall = 1 to identify
+            // system call enter, change inSysCall = 1 to identify
           inSysCall = 1;
         } else {
-          // system call return
+                    // system call return
           struct user_regs_struct return_regs;
-          // use ptrace to get return_regs point
+                    // use ptrace to get return_regs point
           ptrace(PTRACE_GETREGS, (pid_t)ch, NULL, &return_regs);
-          // use ptrace to change return_regs as EACCES (Permission denied)
+                    // use ptrace to change return_regs as EACCES (Permission denied)
           return_regs.rax = -EACCES;
           ptrace(PTRACE_SETREGS, (pid_t)ch, NULL, &return_regs);
           inSysCall = 0;
         }
       }
     }
-    // use ptrace to hook block process system call in and out, give time to check
+        // use ptrace to hook block process system call in and out, give time to check
     ptrace(PTRACE_SYSCALL, (pid_t)ch, NULL, NULL);
   }
   return 0;
